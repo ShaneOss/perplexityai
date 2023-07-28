@@ -10,6 +10,12 @@ perplexity = Perplexity()
 answer = perplexity.search("What is the meaning of life?")
 print(answer)
 ```
+# The model used can be updated in Perplexity.py
+    #Available Models
+    # llama-2-7b-chat
+    # llama-2-13b-chat
+    # llama-2-70b-chat
+    self.model = "llama-2-70b-chat"
 
 You can even create a cli tool with it:
 ```python
