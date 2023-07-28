@@ -1,5 +1,5 @@
 # perplexityai
-A python api to use perplexity.ai
+A python api to use labs.perplexity.ai
 
 # Usage
 You can just import the Perplexity class and use it like this:
@@ -8,7 +8,7 @@ from Perplexity import Perplexity
 
 perplexity = Perplexity()
 answer = perplexity.search("What is the meaning of life?")
-print(answer.json_answer_text["answer"])
+print(answer)
 ```
 
 You can even create a cli tool with it:
@@ -21,5 +21,5 @@ while True:
     inp = str(input("> "))
     c = perplexity.search(inp)
     if c:
-        print(c.json_answer_text["answer"])
+        print(c)
 ```
