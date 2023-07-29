@@ -27,12 +27,12 @@ class Perplexity:
 
         assert self.ask_anonymous_user(), "Failed to ask anonymous user"
         self.ws: WebSocketApp = self.init_websocket()
-        self.ws_message = None
+        self.ws_message = ""
         self.n = 1
         self.ws_connected = False
         self.auth_session()
-        self.query_str = None
-        self.answer = None
+        self.query_str = ""
+        self.answer = ""
         
         #Available Models
         # llama-2-7b-chat
@@ -103,30 +103,33 @@ class Perplexity:
         self.ws.send("2probe")
         
     def on_message(self, _, message):
-        if message == "2":
-            self.ws.send("3")
-        elif message == "3probe":
-            self.ws.send("5")
-        elif message == "6":
-            self.ws.send(self.ws_message)
-            print("resending message: " + self.ws_message)
+        if message is not None and isinstance(message, str):
+            if message == "2":
+                self.ws.send("3")
+            elif message == "3probe":
+                self.ws.send("5")
+            elif message == "6":
+                if self.ws_message != "":
+                    self.ws.send(self.ws_message)
 
-        if (self.searching) and message.startswith(f"42[\"{self.model}_query_progress"):
-            # Check if the string contains '"status":"completed"' and '"final":true'
-            if '"status":"completed"' in message and '"final":true' in message:
-                # Extract the output from the message
-                start = message.find('"output":"') + len('"output":"')
-                end = message.find('","final"')
-                output = message[start+1:end]
-                self.answer = output
-                self.searching = False
+            if (self.searching) and message.startswith(f"42[\"{self.model}_query_progress"):
+                # Check if the string contains '"status":"completed"' and '"final":true'
+                if '"status":"completed"' in message and '"final":true' in message:
+                    # Extract the output from the message
+                    start = message.find('"output":"') + len('"output":"')
+                    end = message.find('","final"')
+                    output = message[start+1:end]
+                    self.answer = output
+                    self.searching = False
+        else:
+            print('The message is None or not a string.')
                 
-    def on_close(self, ws):
-        print("Websocket connection closed.")
+    def on_close(self, ws, close_status_code, close_msg):
+        print("Websocket connection closed.", close_status_code, close_msg)
         self.ws_connected = False
         while self.answer is None:
             self.ws: WebSocketApp = self.init_websocket()
-            self.answer = search(self.query_str)
+            self.answer = self.search(self.query_str)
 
     def on_error(self, ws, error):
         print(f"Websocket error: {error}")
@@ -157,9 +160,9 @@ class Perplexity:
     def auth_session(self) -> None:
         self.session.get(url="https://www.perplexity.ai/api/auth/session")
 
-    def search(self, query: str) -> None:
-        self.query_str = query
+    def search(self, query: str):
         formatted_query = query.replace('\n', '\\n').replace('\t', '\\t')
+        self.query_str = formatted_query
         assert not self.searching, "Already searching"
         self.searching = True
         self.n += 1
@@ -177,8 +180,8 @@ class Perplexity:
             #print("Searching...")
             sleep(0.1)
 
-        self.ws.close()
-        if self.answer is not None:
+        self.ws.close() # Comment out this line if you want to re-use the existing connection and maintain chat history.
+        if self.answer != "":
             formatted_output = self.answer.replace('\\n', '\n').replace('\\t', '\t')
             return formatted_output
         else:
