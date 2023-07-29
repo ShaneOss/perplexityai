@@ -9,6 +9,8 @@ from websocket import WebSocketApp
 import websocket
 import ssl
 
+#from Answer import Answer
+
 class Perplexity:
     """A class to interact with the Perplexity website.
     To get started you need to create an instance of this class.
@@ -107,6 +109,7 @@ class Perplexity:
             self.ws.send("5")
         elif message == "6":
             self.ws.send(self.ws_message)
+            print("resending message: " + self.ws_message)
 
         if (self.searching) and message.startswith(f"42[\"{self.model}_query_progress"):
             # Check if the string contains '"status":"completed"' and '"final":true'
@@ -156,11 +159,12 @@ class Perplexity:
 
     def search(self, query: str) -> None:
         self.query_str = query
+        formatted_query = query.replace('\n', '\\n').replace('\t', '\\t')
         assert not self.searching, "Already searching"
         self.searching = True
         self.n += 1
         
-        self.ws_message: str = f'42["perplexity_playground",{{"model":"{self.model}","messages":[{{"role":"user","content":"{query}","priority":0}}]}}]'
+        self.ws_message: str = f'42["perplexity_playground",{{"model":"{self.model}","messages":[{{"role":"user","content":"{formatted_query}","priority":0}}]}}]'
 
         while not self.ws.sock or not self.ws.sock.connected:
             print("Waiting for connection to open...")
