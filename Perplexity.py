@@ -186,6 +186,9 @@ class Perplexity:
             if time() - start_time > timeout:
                 return self.search(query, retry_count + 1)
             sleep(1)
+            while self.answer is None:
+                self.ws: WebSocketApp = self.init_websocket()
+                self.answer = self.search(self.query_str)
 
         self.ws.send(self.ws_message)
 
