@@ -178,7 +178,7 @@ class Perplexity:
         self.n += 1
         self.ws_message: str = f'42["perplexity_playground",{{"model":"{self.model}","messages":[{{"role":"user","content":"{formatted_query}","priority":0}}]}}]'
         start_time = time()
-        timeout = 30  # Timeout in seconds
+        timeout = 40  # Timeout in seconds
 
         # Waiting for connection to open
         while not self.ws.sock or not self.ws.sock.connected:
@@ -186,9 +186,6 @@ class Perplexity:
             if time() - start_time > timeout:
                 return self.search(query, retry_count + 1)
             sleep(1)
-            while self.answer is None:
-                self.ws: WebSocketApp = self.init_websocket()
-                self.answer = self.search(self.query_str)
 
         self.ws.send(self.ws_message)
 
