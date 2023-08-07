@@ -2,7 +2,7 @@ from time import sleep
 from uuid import uuid4
 from requests import Session
 from threading import Thread
-import time
+from time import sleep, time
 from json import loads, dumps
 from random import getrandbits
 from websocket import WebSocketApp
@@ -104,6 +104,7 @@ class Perplexity:
         
     def on_message(self, _, message):
         if message is not None and isinstance(message, str):
+            #print(message)
             if message == "2":
                 self.ws.send("3")
             elif message == "3probe":
@@ -160,30 +161,46 @@ class Perplexity:
     def auth_session(self) -> None:
         self.session.get(url="https://www.perplexity.ai/api/auth/session")
 
-    def search(self, query: str):
+    def search(self, query: str, retry_count=0):
+        if retry_count > 3:  # Maximum of 3 retries
+            self.searching = False  # Reset the searching flag
+            return 'Failed to get response after 3 retries.'
+
         formatted_query = query.replace('\n', '\\n').replace('\t', '\\t')
         self.query_str = formatted_query
-        assert not self.searching, "Already searching"
+
+        # If already searching, return an error, reset the searching flag, and retry
+        if self.searching:
+            self.searching = False
+            return self.search(query, retry_count + 1)
+
         self.searching = True
         self.n += 1
-        
         self.ws_message: str = f'42["perplexity_playground",{{"model":"{self.model}","messages":[{{"role":"user","content":"{formatted_query}","priority":0}}]}}]'
+        start_time = time()
+        timeout = 30  # Timeout in seconds
 
+        # Waiting for connection to open
         while not self.ws.sock or not self.ws.sock.connected:
             print("Waiting for connection to open...")
+            if time() - start_time > timeout:
+                return self.search(query, retry_count + 1)
             sleep(1)
 
-        #print("Sending search message: ", self.ws_message)
         self.ws.send(self.ws_message)
-        
+
+        # Waiting for search to complete
+        start_time = time()
         while self.searching:
             #print("Searching...")
+            if time() - start_time > timeout:
+                return self.search(query, retry_count + 1)
             sleep(0.1)
 
-        self.ws.close() # Comment out this line if you want to re-use the existing connection and maintain chat history.
+        # Process the response
         if self.answer != "":
             formatted_output = self.answer.replace('\\n', '\n').replace('\\t', '\t')
             return formatted_output
         else:
-            return('There was an error getting a response.')
-        
+            self.searching = False  # Reset the searching flag before retrying
+            return self.search(query, retry_count + 1)  # Recursive call if there is an error
