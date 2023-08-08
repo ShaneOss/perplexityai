@@ -184,7 +184,8 @@ class Perplexity:
         while not self.ws.sock or not self.ws.sock.connected:
             print("Waiting for connection to open...")
             if time() - start_time > timeout:
-                return self.search(query, retry_count + 1)
+                self.ws: WebSocketApp = self.init_websocket()
+                self.answer = self.search(self.query_str)
             sleep(1)
 
         self.ws.send(self.ws_message)
@@ -192,10 +193,10 @@ class Perplexity:
         # Waiting for search to complete
         start_time = time()
         while self.searching:
-            #print("Searching...")
+            print("Searching...")
             if time() - start_time > timeout:
                 return self.search(query, retry_count + 1)
-            sleep(0.1)
+            sleep(1)
 
         # Process the response
         if self.answer != "":
