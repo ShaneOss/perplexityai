@@ -20,8 +20,8 @@ class Perplexity:
         self.searching = False
         self.t: str = self.get_t()
         self.sid: str = self.get_sid()
-        self.frontend_uuid = str(uuid4())
-        self.frontend_session_id = str(uuid4())
+        #self.frontend_uuid = str(uuid4())
+        #self.frontend_session_id = str(uuid4())
 
         assert self.ask_anonymous_user(), "Failed to ask anonymous user"
         self.ws: WebSocketApp = self.init_websocket()
@@ -37,31 +37,22 @@ class Perplexity:
         # llama-2-7b-chat
         # llama-2-13b-chat
         # llama-2-70b-chat
-        self.model = "llama-2-13b-chat"
+        self.model = "llama-2-70b-chat"
 
         sleep(1)
         
-    def reconnect(self):
-        print("Reconnecting websocket...")
-
-        # Reinitialize the WebSocket
-        self.session: Session = self.init_session()
-        self.searching = False
-        self.t: str = self.get_t()
-        self.sid: str = self.get_sid()
-        self.frontend_uuid = str(uuid4())
-        self.frontend_session_id = str(uuid4())
-
-        assert self.ask_anonymous_user(), "Failed to ask anonymous user"
-        self.ws: WebSocketApp = self.init_websocket()
-        
+    def endinstance(self):
+        print("Terminating Perplexity instance...")
+        self.ws_connected = False
+        if self.ws and self.ws.sock:
+            self.ws.sock.shutdown()
         
     def init_session(self) -> Session:
         session: Session = Session()
 
         uuid = str(uuid4())
         headers = {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.200',
             'Origin': 'https://labs.perplexity.ai',
             'Host': 'labs-api.perplexity.ai'
         }
@@ -75,6 +66,25 @@ class Perplexity:
         return format(getrandbits(32), "08x")
 
     def get_sid(self) -> str:
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.200',
+            'origin': 'https://labs.perplexity.ai',
+            "referrer": "https://labs.perplexity.ai/",
+            #'Host': 'labs-api.perplexity.ai',
+            "accept": "*/*",
+            "accept-language": "en-AU,en-US;q=0.9,en;q=0.8",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Microsoft Edge\";v=\"115\", \"Chromium\";v=\"115\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site"
+        }
+        
+        self.session.headers.update(headers)
+        
         response = self.session.get(
             url=f"https://labs-api.perplexity.ai/socket.io/?EIO=4&transport=polling&t={self.t}",
         )
@@ -103,7 +113,8 @@ class Perplexity:
             data="40{\"jwt\":\"anonymous-ask-user\"}"
         ).text
 
-        return response == "OK"
+        if response == "OK":
+            return response == "OK"
                 
     def get_cookies_str(self) -> str:
         cookies = ""
@@ -143,12 +154,12 @@ class Perplexity:
     def on_close(self, ws, close_status_code, close_msg):
         print("Websocket connection closed.", close_status_code, close_msg)
         self.ws_connected = False
-        self.reconnect()  # Call reconnect method
+        self.endinstance()
 
 
     def on_error(self, ws, error):
         print(f"Websocket error: {error}")
-        self.reconnect()  # Call reconnect method
+        self.endinstance()
     
     def init_websocket(self) -> websocket.WebSocketApp:       
         headers = {
@@ -176,39 +187,50 @@ class Perplexity:
     def auth_session(self) -> None:
         self.session.get(url="https://www.perplexity.ai/api/auth/session")
 
-    def search(self, query: str):
+
+    def search(self, query: str, retry_count=0):
+        if retry_count > 3:  # Maximum of 3 retries
+            self.searching = False  # Reset the searching flag
+            return 'Failed to get response after 3 retries.'
+
         formatted_query = query.replace('\n', '\\n').replace('\t', '\\t')
         self.query_str = formatted_query
 
         # If already searching, return an error, reset the searching flag, and retry
         if self.searching:
-            print("Already searching...")
             self.searching = False
-            return self.search(query)
+            return self.search(query, retry_count + 1)
 
         self.searching = True
         self.n += 1
         self.ws_message: str = f'42["perplexity_playground",{{"model":"{self.model}","messages":[{{"role":"user","content":"{formatted_query}","priority":0}}]}}]'
-            
+        start_time = time()
+        timeout = 20  # Timeout in seconds
+        
         # Waiting for connection to open
         while not self.ws.sock or not self.ws.sock.connected:
             print("Waiting for connection to open...")
+            if time() - start_time > timeout:
+                return ""
             sleep(1)
 
         self.ws.send(self.ws_message)
 
         # Waiting for search to complete
+        start_time = time()
+        timeout = 40  # Timeout in seconds
         while self.searching:
             #print("Searching...")
+            if time() - start_time > timeout:
+                return self.search(query, retry_count + 1)
             sleep(1)
 
         # Process the response
         if self.answer != "":
             formatted_output = self.answer.replace('\\n', '\n').replace('\\t', '\t')
-            self.testcloseconnection += 1
             return formatted_output
         else:
             self.searching = False  # Reset the searching flag before retrying
-            return self.search(query)  # Recursive call if there is an error
+            return self.search(query, retry_count + 1)  # Recursive call if there is an error
 
         
