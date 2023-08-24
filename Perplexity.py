@@ -37,6 +37,7 @@ class Perplexity:
         # llama-2-7b-chat
         # llama-2-13b-chat
         # llama-2-70b-chat
+        # llama-2-13b-sft
         self.model = "llama-2-70b-chat"
 
         sleep(1)
