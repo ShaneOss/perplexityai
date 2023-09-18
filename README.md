@@ -1,3 +1,5 @@
+# NOTE: This stopped working due to Javascript/Bot checks after they moved to Cloudflare. For a working version using Selenium see: https://github.com/ShaneOss/perplexitylabs/tree/main
+
 # perplexityai
 A python api to use labs.perplexity.ai
 
